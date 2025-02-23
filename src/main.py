@@ -1,5 +1,15 @@
 from datetime import datetime, timedelta
 import argparse
+import os
+import sys
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录的绝对路径（假设 src 目录在项目根目录下）
+project_root = os.path.dirname(current_dir)
+# 将 src 目录的绝对路径添加到 sys.path 中
+src_dir = os.path.join(project_root, 'src')
+print(src_dir)
+sys.path.append(src_dir)
+
 from src.agents.valuation import valuation_agent
 from src.agents.state import AgentState
 from src.agents.sentiment import sentiment_agent
@@ -15,7 +25,7 @@ import pandas as pd
 
 
 ##### Run the Hedge Fund #####
-def run_hedge_fund(ticker: str, start_date: str, end_date: str, portfolio: dict, show_reasoning: bool = False, num_of_news: int = 5):
+def run_hedge_fund(ticker: str, start_date: str, end_date: str, portfolio: dict, show_reasoning: bool = False, num_of_news: int = 10):
     final_state = app.invoke(
         {
             "messages": [

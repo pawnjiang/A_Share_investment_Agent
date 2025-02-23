@@ -17,10 +17,10 @@ numpy = "^1.24.0"
 python-dotenv = "1.0.0"
 matplotlib = "^3.9.2"
 yfinance = "^0.2.51"
-akshare = "^1.11.22"
+akshare = "^1.16.9"
 requests = "^2.31.0"
 beautifulsoup4 = "^4.12.3"
-openai = "^1.12.0"
+openai = "^1.63.2"
 langchain-core = "^0.3.29"
 google-generativeai = "^0.3.0"
 backoff = "^2.2.1"
@@ -31,6 +31,12 @@ pytest = "^7.4.0"
 black = "^23.7.0"
 isort = "^5.12.0"
 flake8 = "^6.1.0"
+
+
+[[tool.poetry.source]]
+name = "mirrors"
+url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple/"
+priority = "primary"
 
 [build-system]
 requires = ["poetry-core"]

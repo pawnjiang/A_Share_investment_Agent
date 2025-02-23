@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from google import genai
+from openai import OpenAI
 from dotenv import load_dotenv
 from dataclasses import dataclass
 import backoff
@@ -82,19 +82,19 @@ else:
     logger.warning(f"{ERROR_ICON} 未找到环境变量文件: {env_path}")
 
 # 验证环境变量
-api_key = os.getenv("GEMINI_API_KEY")
-model = os.getenv("GEMINI_MODEL")
+api_key = os.getenv("OPENAI_API_KEY")
+model = os.getenv("OPENAI_MODEL_NAME")
+openai_base_url = os.getenv("OPENAI_BASE_URL")
 
 if not api_key:
-    logger.error(f"{ERROR_ICON} 未找到 GEMINI_API_KEY 环境变量")
-    raise ValueError("GEMINI_API_KEY not found in environment variables")
+    logger.error(f"{ERROR_ICON} 未找到 OPENAI_API_KEY 环境变量")
+    raise ValueError("OPENAI_API_KEY not found in environment variables")
 if not model:
-    model = "gemini-1.5-flash"
+    model = "gpt-3.5-turbo"
     logger.info(f"{WAIT_ICON} 使用默认模型: {model}")
+if not openai_base_url:
+    logger.info(f"{WAIT_ICON} 使用 OpenAI 官方 API 地址")
 
-# 初始化 Gemini 客户端
-client = genai.Client(api_key=api_key)
-logger.info(f"{SUCCESS_ICON} Gemini 客户端初始化成功")
 
 
 @backoff.on_exception(
@@ -102,25 +102,30 @@ logger.info(f"{SUCCESS_ICON} Gemini 客户端初始化成功")
     (Exception),
     max_tries=5,
     max_time=300,
-    giveup=lambda e: "AFC is enabled" not in str(e)
+    giveup=lambda e: "rate limit" not in str(e).lower()
 )
-def generate_content_with_retry(model, contents, config=None):
+def generate_content_with_retry(model, messages, config=None):
     """带重试机制的内容生成函数"""
     try:
-        logger.info(f"{WAIT_ICON} 正在调用 Gemini API...")
-        logger.info(f"请求内容: {contents[:500]}..." if len(
-            str(contents)) > 500 else f"请求内容: {contents}")
+        logger.info(f"{WAIT_ICON} 正在调用 OpenAI API...")
+        logger.info(f"请求内容: {messages[:500]}..." if len(
+            str(messages)) > 500 else f"请求内容: {messages}")
         logger.info(f"请求配置: {config}")
+        client = OpenAI(
+            api_key=api_key, # This is the default and can be omitted
+            base_url=openai_base_url
+            )
 
-        response = client.models.generate_content(
+
+        response = client.chat.completions.create(
             model=model,
-            contents=contents,
-            config=config
+            messages=messages,
+            **config if config else {}
         )
 
         logger.info(f"{SUCCESS_ICON} API 调用成功")
-        logger.info(f"响应内容: {response.text[:500]}..." if len(
-            str(response.text)) > 500 else f"响应内容: {response.text}")
+        logger.info(f"响应内容: {response.choices[0].message.content[:500]}..." if len(
+            str(response.choices[0].message.content)) > 500 else f"响应内容: {response.choices[0].message.content}")
         return response
     except Exception as e:
         if "AFC is enabled" in str(e):
@@ -136,36 +141,23 @@ def get_chat_completion(messages, model=None, max_retries=3, initial_retry_delay
     """获取聊天完成结果，包含重试逻辑"""
     try:
         if model is None:
-            model = os.getenv("GEMINI_MODEL", "gemini-1.5-flash")
+            model = os.getenv("OPENAI_MODEL_NAME", "gpt-3.5-turbo")
 
         logger.info(f"{WAIT_ICON} 使用模型: {model}")
         logger.debug(f"消息内容: {messages}")
 
         for attempt in range(max_retries):
             try:
-                # 转换消息格式
-                prompt = ""
-                system_instruction = None
-
-                for message in messages:
-                    role = message["role"]
-                    content = message["content"]
-                    if role == "system":
-                        system_instruction = content
-                    elif role == "user":
-                        prompt += f"User: {content}\n"
-                    elif role == "assistant":
-                        prompt += f"Assistant: {content}\n"
-
                 # 准备配置
                 config = {}
-                if system_instruction:
-                    config['system_instruction'] = system_instruction
+                if any(message["role"] == "system" for message in messages):
+                    config["temperature"] = 0.7
+                    config["top_p"] = 1.0
 
                 # 调用 API
                 response = generate_content_with_retry(
                     model=model,
-                    contents=prompt.strip(),
+                    messages=messages,
                     config=config
                 )
 
@@ -179,14 +171,10 @@ def get_chat_completion(messages, model=None, max_retries=3, initial_retry_delay
                         continue
                     return None
 
-                # 转换响应格式
-                chat_message = ChatMessage(content=response.text)
-                chat_choice = ChatChoice(message=chat_message)
-                completion = ChatCompletion(choices=[chat_choice])
-
-                logger.debug(f"API 原始响应: {response.text}")
+                # 直接返回响应内容
+                logger.debug(f"API 原始响应: {response.choices[0].message.content}")
                 logger.info(f"{SUCCESS_ICON} 成功获取响应")
-                return completion.choices[0].message.content
+                return response.choices[0].message.content
 
             except Exception as e:
                 logger.error(
