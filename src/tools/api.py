@@ -300,7 +300,6 @@ def get_price_history(symbol: str, start_date: str = None, end_date: str = None,
                - "": 不复权
                - "qfq": 前复权（默认）
                - "hfq": 后复权
-
     Returns:
         包含以下列的DataFrame：
         - date: 日期
